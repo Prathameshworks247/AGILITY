@@ -1,15 +1,285 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
-  previewFeatures = ["mongodb"]
 }
 
 datasource db {
   provider = "mongodb"
   url      = env("DATABASE_URL")
+}
+
+// ============================================
+// Authentication Models (NextAuth)
+// ============================================
+
+model User {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?   // For credentials auth
+  role          String?   // scrumMaster, developer (null until user selects role)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts           Account[]
+  sessions           Session[]
+  organizationMemberships OrganizationMember[]
+  projectMemberships ProjectMember[]
+  assignedTasks      Task[]      @relation("AssignedTasks")
+  createdTasks       Task[]      @relation("CreatedTasks")
+  activities         Activity[]
+  metrics            DeveloperMetric[]
+  comments           Comment[]
+}
+
+model Account {
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String  @db.ObjectId
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.String
+  access_token      String? @db.String
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.String
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  sessionToken String   @unique
+  userId       String   @db.ObjectId
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// Core Business Models
+// ============================================
+
+model Organization {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  slug        String   @unique
+  description String?
+  image       String?
+  inviteCode  String   @unique // Unique code for developers to join
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  members     OrganizationMember[]
+  projects    Project[]
+}
+
+model OrganizationMember {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String   @db.ObjectId
+  userId         String   @db.ObjectId
+  role           String   @default("member") // owner, admin, member
+  
+  joinedAt       DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+}
+
+model Project {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  slug           String
+  description    String?
+  organizationId String   @db.ObjectId
+  
+  status         String   @default("active") // active, archived, completed
+  startDate      DateTime?
+  endDate        DateTime?
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members        ProjectMember[]
+  sprints        Sprint[]
+  tasks          Task[]
+  activities     Activity[]
+  
+  @@unique([organizationId, slug])
+}
+
+model ProjectMember {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  projectId String   @db.ObjectId
+  userId    String   @db.ObjectId
+  role      String   @default("developer") // scrumMaster, productOwner, developer
+  
+  joinedAt  DateTime @default(now())
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model Sprint {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  number      Int
+  projectId   String   @db.ObjectId
+  
+  goal        String?
+  status      String   @default("planned") // planned, active, completed, cancelled
+  
+  startDate   DateTime
+  endDate     DateTime
+  
+  // Sprint metrics for velocity chart
+  plannedPoints    Int?     // Total story points planned
+  completedPoints  Int?     // Total story points completed
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks         Task[]
+  burndownData  SprintBurndown[]
+  
+  @@unique([projectId, number])
+}
+
+model Task {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  description String?
+  projectId   String   @db.ObjectId
+  sprintId    String?  @db.ObjectId
+  
+  type        String   @default("STORY") // STORY, BUG, TASK, EPIC
+  status      String   @default("TODO")  // TODO, IN_PROGRESS, IN_REVIEW, DONE
+  priority    String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  
+  storyPoints Int?
+  
+  assigneeId  String?  @db.ObjectId
+  creatorId   String   @db.ObjectId
+  
+  tags        String[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+
+  // Relations
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprint      Sprint?   @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  assignee    User?     @relation("AssignedTasks", fields: [assigneeId], references: [id], onDelete: SetNull)
+  creator     User      @relation("CreatedTasks", fields: [creatorId], references: [id], onDelete: Cascade)
+  comments    Comment[]
+}
+
+model Comment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  content   String
+  taskId    String   @db.ObjectId
+  userId    String   @db.ObjectId
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// Activity & Metrics Models
+// ============================================
+
+model Activity {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  type        String   // commit, pr, flow, taskUpdate, statusChange
+  message     String
+  projectId   String   @db.ObjectId
+  userId      String   @db.ObjectId
+  
+  metadata    Json?    // Additional data like PR number, commit hash, etc.
+  
+  createdAt   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([projectId, createdAt])
+}
+
+model DeveloperMetric {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  date        DateTime @default(now())
+  
+  // Daily metrics
+  commits     Int      @default(0)
+  pullRequests Int     @default(0)
+  hoursWorked Float    @default(0)
+  tasksCompleted Int   @default(0)
+  
+  // Flow state tracking
+  flowStateMinutes Int @default(0)
+  
+  // Burnout indicators
+  weeklyHours Float?
+  burnoutRisk String?  // low, medium, high
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, date])
+}
+
+// ============================================
+// Sprint Analytics Models
+// ============================================
+
+model SprintBurndown {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  sprintId          String   @db.ObjectId
+  date              DateTime // The day this data point represents
+  
+  // Burndown metrics
+  idealRemaining    Int      // Ideal remaining story points for this day
+  actualRemaining   Int      // Actual remaining story points
+  completed         Int      // Story points completed so far
+  
+  createdAt         DateTime @default(now())
+
+  sprint            Sprint   @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  
+  @@unique([sprintId, date])
 }
