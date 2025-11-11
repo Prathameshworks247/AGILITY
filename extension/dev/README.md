@@ -1,71 +1,56 @@
-# dev README
+# Agility AI Companion
 
-This is the README for your extension "dev". After writing up a brief description, we recommend including the following sections.
+The Agility AI Companion keeps your Scrum Master up to date by streaming code snapshots from VS Code to the Agility AI review service. Each snapshot is analysed by the microservice and surfaced on the Scrum dashboard as an AI review.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- Auto-tracks saves for selected languages and forwards code snapshots.
+- Command palette action to set or clear the active Agility task.
+- Toggle auto-tracking directly from the status bar.
+- Manually push the current editor buffer for review on demand.
+- Output channel logging for transparency and debugging.
 
-For example if there is an image subfolder under your extension project workspace:
+## Getting Started
 
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+1. Install dependencies and compile once:
+   ```bash
+   npm install
+   npm run compile
+   ```
+2. Open this folder in VS Code and press `F5` to launch an Extension Development Host.
+3. Configure the connection under **Settings → Agility AI Companion**.
+4. Run **Agility AI: Set Active Task** to choose the task you’re working on.
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+The extension contributes the following settings:
 
-For example:
+- `agilityAI.apiBaseUrl` – Base URL for the AI review microservice (default `http://localhost:8002`).
+- `agilityAI.apiToken` – Optional bearer token for authenticating requests.
+- `agilityAI.defaultTaskId` – Fallback task ID used when no active task is set.
+- `agilityAI.developerId` – Agility developer identifier included with snapshots.
+- `agilityAI.autoTrack` – Enable automatic snapshot uploads on save.
+- `agilityAI.languages` – Language identifiers that should trigger automatic snapshots.
 
-This extension contributes the following settings:
+## Commands
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+- `Agility AI: Set Active Task` (`agilityAI.setActiveTask`)
+- `Agility AI: Send Snapshot` (`agilityAI.sendSnapshot`)
+- `Agility AI: Toggle Auto Tracking` (`agilityAI.toggleAutoTracking`)
 
-## Known Issues
+## Status Bar
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+The left status bar item displays tracking mode and active task. Click it to toggle auto tracking.
+
+## Known Limitations
+
+- Requires a Git workspace to include diffs; otherwise only the full file content is sent.
+- The AI review microservice endpoint (`/v1/snapshots`) must be implemented separately.
+- Frequent saves may generate high snapshot volume—disable auto tracking if necessary.
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
+### 0.0.1
 
-### 1.0.0
+Initial scaffold featuring auto tracking, manual snapshots, task selection, and configurable endpoints.
 
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**

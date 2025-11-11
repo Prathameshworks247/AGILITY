@@ -1,26 +1,71 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { getExtensionSettings, observeSettings } from './config';
+import { ReviewClient } from './reviewClient';
+import { ReviewTracker } from './reviewTracker';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+let tracker: ReviewTracker | undefined;
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "dev" is now active!');
+export async function activate(context: vscode.ExtensionContext) {
+	const outputChannel = vscode.window.createOutputChannel('Agility AI');
+	context.subscriptions.push(outputChannel);
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('dev.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from .!');
+	const settings = getExtensionSettings();
+	const client = new ReviewClient(settings, outputChannel);
+	tracker = new ReviewTracker(context, settings, client, outputChannel);
+	context.subscriptions.push(tracker);
+
+	const settingsSubscription = observeSettings((updatedSettings) => {
+		tracker?.updateSettings(updatedSettings);
 	});
+	context.subscriptions.push(settingsSubscription);
 
-	context.subscriptions.push(disposable);
+	const saveListener = vscode.workspace.onDidSaveTextDocument(async (document) => {
+		await tracker?.handleDocumentSaved(document);
+	});
+	context.subscriptions.push(saveListener);
+
+	const setTaskCommand = vscode.commands.registerCommand('agilityAI.setActiveTask', async () => {
+		const currentTask = tracker?.getCurrentTaskId();
+		const value = await vscode.window.showInputBox({
+			title: 'Agility AI: Active Task',
+			value: currentTask,
+			placeHolder: 'Enter the task ID the current work belongs to',
+			prompt: 'Provide the Agility task ID (leave blank to clear).',
+		});
+		if (value === undefined) {
+			return;
+		}
+		await tracker?.setCurrentTaskId(value.length > 0 ? value : undefined);
+	});
+	context.subscriptions.push(setTaskCommand);
+
+	const sendSnapshotCommand = vscode.commands.registerCommand('agilityAI.sendSnapshot', async () => {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor) {
+			vscode.window.showWarningMessage('Open a file in the editor before sending a snapshot.');
+			return;
+		}
+		try {
+			await tracker?.sendManualSnapshot(editor.document);
+			vscode.window.showInformationMessage('Agility AI snapshot sent successfully.');
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			vscode.window.showErrorMessage(`Agility AI snapshot failed: ${message}`);
+		}
+	});
+	context.subscriptions.push(sendSnapshotCommand);
+
+	const toggleAutoTrackingCommand = vscode.commands.registerCommand('agilityAI.toggleAutoTracking', async () => {
+		await tracker?.toggleAutoTracking();
+	});
+	context.subscriptions.push(toggleAutoTrackingCommand);
+
+	outputChannel.appendLine('[Agility AI] Extension activated.');
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+	tracker?.dispose();
+	tracker = undefined;
+}

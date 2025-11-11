@@ -15,6 +15,19 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
 
+interface TaskReviewSummary {
+  id: string;
+  status: string;
+  summary: string;
+  findings: unknown[];
+  createdAt: string;
+  developer?: {
+    id: string;
+    name?: string | null;
+    email: string;
+  } | null;
+}
+
 interface Task {
   id: string;
   title: string;
@@ -31,6 +44,7 @@ interface Task {
     id: string;
     name: string;
   };
+  latestReview?: TaskReviewSummary | null;
 }
 
 interface Sprint {
@@ -68,6 +82,10 @@ const SprintDashboard = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewTask, setReviewTask] = useState<Task | null>(null);
+  const [reviewHistory, setReviewHistory] = useState<TaskReviewSummary[]>([]);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
 const [projectInfo, setProjectInfo] = useState<{ id: string; orgId: string; name: string; slug: string } | null>(null);
   
   const [newTask, setNewTask] = useState({
@@ -243,6 +261,26 @@ const [projectInfo, setProjectInfo] = useState<{ id: string; orgId: string; name
     }
   };
 
+  const handleViewReview = async (task: Task) => {
+    setReviewTask(task);
+    setReviewDialogOpen(true);
+    setIsLoadingReviews(true);
+    try {
+      const response = await fetch(`/api/task-reviews?taskId=${task.id}&limit=10`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch review history');
+      }
+      const data = await response.json();
+      setReviewHistory(data.reviews || []);
+    } catch (error) {
+      console.error('Error fetching task reviews:', error);
+      toast.error('Failed to load AI review history');
+      setReviewHistory([]);
+    } finally {
+      setIsLoadingReviews(false);
+    }
+  };
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'HIGH':
@@ -271,6 +309,32 @@ const [projectInfo, setProjectInfo] = useState<{ id: string; orgId: string; name
     }
   };
 
+  const getReviewBadgeVariant = (status: string) => {
+    switch (status) {
+      case 'PASS':
+        return 'secondary';
+      case 'WARN':
+        return 'default';
+      case 'FAIL':
+        return 'destructive';
+      default:
+        return 'outline';
+    }
+  };
+
+  const getReviewStatusLabel = (status: string) => {
+    switch (status) {
+      case 'PASS':
+        return 'Pass';
+      case 'WARN':
+        return 'Warnings';
+      case 'FAIL':
+        return 'Requires Attention';
+      default:
+        return status;
+    }
+  };
+
   const groupedTasks = {
     TODO: tasks.filter(t => t.status === 'TODO'),
     IN_PROGRESS: tasks.filter(t => t.status === 'IN_PROGRESS'),
@@ -284,6 +348,23 @@ const [projectInfo, setProjectInfo] = useState<{ id: string; orgId: string; name
       day: 'numeric',
       year: 'numeric',
     });
+  };
+
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const diff = Date.now() - date.getTime();
+    const minutes = Math.round(diff / (1000 * 60));
+
+    if (minutes <= 1) return 'just now';
+    if (minutes < 60) return `${minutes}m ago`;
+
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+
+    const days = Math.round(hours / 24);
+    if (days < 7) return `${days}d ago`;
+
+    return date.toLocaleDateString();
   };
 
   if (isLoading) {
@@ -304,64 +385,99 @@ const [projectInfo, setProjectInfo] = useState<{ id: string; orgId: string; name
         <Badge variant="outline">{columnTasks.length}</Badge>
       </div>
       <div className="space-y-2">
-        {columnTasks.map((task) => (
-          <Card key={task.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="space-y-2">
-                <div className="flex items-start justify-between">
-                  <h4 className="font-medium text-sm">{task.title}</h4>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6"
-                    onClick={() => handleEditTask(task)}
-                  >
-                    <Edit className="h-3 w-3" />
-                  </Button>
-                </div>
-                {task.description && (
-                  <p className="text-xs text-muted-foreground line-clamp-2">{task.description}</p>
-                )}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant={getPriorityColor(task.priority)} className="text-xs">
-                    {task.priority}
-                  </Badge>
-                  {task.storyPoints && (
-                    <Badge variant="outline" className="text-xs">{task.storyPoints} pts</Badge>
+        {columnTasks.map((task) => {
+          const latestReview = task.latestReview;
+          return (
+            <Card key={task.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between">
+                    <h4 className="font-medium text-sm">{task.title}</h4>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      onClick={() => handleEditTask(task)}
+                    >
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  {task.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2">{task.description}</p>
                   )}
-                  {task.assignee && (
-                    <div className="flex items-center gap-1">
-                      <Avatar className="h-5 w-5">
-                        <AvatarFallback className="text-xs">
-                          {task.assignee.name?.charAt(0)?.toUpperCase() || task.assignee.email.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-xs text-muted-foreground">
-                        {task.assignee.name || task.assignee.email}
-                      </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant={getPriorityColor(task.priority)} className="text-xs">
+                      {task.priority}
+                    </Badge>
+                    {task.storyPoints && (
+                      <Badge variant="outline" className="text-xs">{task.storyPoints} pts</Badge>
+                    )}
+                    {task.assignee && (
+                      <div className="flex items-center gap-1">
+                        <Avatar className="h-5 w-5">
+                          <AvatarFallback className="text-xs">
+                            {task.assignee.name?.charAt(0)?.toUpperCase() || task.assignee.email.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs text-muted-foreground">
+                          {task.assignee.name || task.assignee.email}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {status !== 'DONE' && (
+                    <Select
+                      value={task.status}
+                      onValueChange={(value) => handleUpdateTask(task.id, { status: value })}
+                    >
+                      <SelectTrigger className="h-7 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="TODO">To Do</SelectItem>
+                        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                        <SelectItem value="IN_REVIEW">In Review</SelectItem>
+                        <SelectItem value="DONE">Done</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {latestReview && (
+                    <div className="space-y-2 rounded-md border bg-muted/40 p-2">
+                      <div className="flex items-center justify-between">
+                        <Badge variant={getReviewBadgeVariant(latestReview.status)}>
+                          AI Review: {getReviewStatusLabel(latestReview.status)}
+                        </Badge>
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {formatRelativeTime(latestReview.createdAt)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{latestReview.summary}</p>
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>
+                          {Array.isArray(latestReview.findings)
+                            ? `${latestReview.findings.length} finding${latestReview.findings.length === 1 ? '' : 's'}`
+                            : '0 findings'}
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewReview(task);
+                          }}
+                        >
+                          View details
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
-                {status !== 'DONE' && (
-                  <Select
-                    value={task.status}
-                    onValueChange={(value) => handleUpdateTask(task.id, { status: value })}
-                  >
-                    <SelectTrigger className="h-7 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="TODO">To Do</SelectItem>
-                      <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                      <SelectItem value="IN_REVIEW">In Review</SelectItem>
-                      <SelectItem value="DONE">Done</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
@@ -584,6 +700,119 @@ const [projectInfo, setProjectInfo] = useState<{ id: string; orgId: string; name
                     </Button>
                   </DialogFooter>
                 </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* Review History Dialog */}
+            <Dialog
+              open={reviewDialogOpen}
+              onOpenChange={(open) => {
+                setReviewDialogOpen(open);
+                if (!open) {
+                  setReviewTask(null);
+                  setReviewHistory([]);
+                }
+              }}
+            >
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>AI Review History</DialogTitle>
+                  <DialogDescription>
+                    {reviewTask ? `Task: ${reviewTask.title}` : 'Recent AI feedback for this task'}
+                  </DialogDescription>
+                </DialogHeader>
+                {isLoadingReviews ? (
+                  <div className="py-10 text-center text-muted-foreground text-sm">
+                    Loading review history...
+                  </div>
+                ) : reviewHistory.length === 0 ? (
+                  <div className="py-8 text-center text-muted-foreground text-sm">
+                    No AI review feedback available for this task yet.
+                  </div>
+                ) : (
+                  <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-2">
+                    {reviewHistory.map((review) => {
+                      const findings = Array.isArray(review.findings) ? review.findings : [];
+                      return (
+                        <div key={review.id} className="space-y-2 rounded-lg border bg-muted/40 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant={getReviewBadgeVariant(review.status)}>
+                                AI Review: {getReviewStatusLabel(review.status)}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {formatRelativeTime(review.createdAt)}
+                              </span>
+                            </div>
+                            {review.developer && (
+                              <span className="text-xs text-muted-foreground">
+                                by {review.developer.name || review.developer.email}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-foreground">{review.summary}</p>
+                          {findings.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Findings ({findings.length})
+                              </p>
+                              <ul className="space-y-2">
+                                {findings.map((finding, index) => {
+                                  if (finding && typeof finding === 'object') {
+                                    const data = finding as Record<string, any>;
+                                    const severity = typeof data.severity === 'string' ? data.severity.toUpperCase() : null;
+                                    return (
+                                      <li key={index} className="space-y-1 rounded-md border bg-background p-3 text-xs text-muted-foreground">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="font-medium text-foreground">
+                                            {data.title || data.message || `Finding ${index + 1}`}
+                                          </span>
+                                          {severity && (
+                                            <Badge
+                                              variant={
+                                                severity === 'HIGH'
+                                                  ? 'destructive'
+                                                  : severity === 'MEDIUM'
+                                                  ? 'default'
+                                                  : 'secondary'
+                                              }
+                                            >
+                                              {severity}
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        {data.message && <p>{data.message}</p>}
+                                        {(data.filePath || data.startLine) && (
+                                          <p className="text-[10px] uppercase tracking-wide">
+                                            {data.filePath ? data.filePath : ''}
+                                            {data.startLine
+                                              ? ` • Line ${data.startLine}${data.endLine ? `-${data.endLine}` : ''}`
+                                              : ''}
+                                          </p>
+                                        )}
+                                      </li>
+                                    );
+                                  }
+
+                                  return (
+                                    <li key={index} className="rounded-md border bg-background p-3 text-xs text-muted-foreground">
+                                      {String(finding)}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setReviewDialogOpen(false)}>
+                    Close
+                  </Button>
+                </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>

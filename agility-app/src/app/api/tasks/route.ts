@@ -157,7 +157,7 @@ export async function GET(req: Request) {
     where.projectId = projectId;
     }
 
-    const tasks = await db.task.findMany({
+    const taskQuery: Prisma.TaskFindManyArgs = {
       where,
       include: {
         assignee: {
@@ -187,9 +187,82 @@ export async function GET(req: Request) {
         { priority: 'desc' },
         { createdAt: 'desc' },
       ],
+    };
+
+    const tasks = await db.task.findMany(taskQuery);
+
+    const taskIds = tasks.map((task) => task.id);
+    const reviewMap = new Map<
+      string,
+      {
+        id: string;
+        status: string;
+        summary: string;
+        findings: unknown[];
+        createdAt: Date;
+        developer:
+          | {
+              id: string;
+              name: string | null;
+              email: string;
+            }
+          | null;
+      }
+    >();
+
+    if (taskIds.length > 0) {
+      const reviews = await (db as any).taskReview.findMany({
+        where: { taskId: { in: taskIds } },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          taskId: true,
+          status: true,
+          summary: true,
+          findings: true,
+          createdAt: true,
+          developer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      for (const review of reviews) {
+        if (!reviewMap.has(review.taskId)) {
+          reviewMap.set(review.taskId, {
+            id: review.id,
+            status: review.status,
+            summary: review.summary,
+            findings: review.findings ?? [],
+            createdAt: review.createdAt,
+            developer: review.developer,
+          });
+        }
+      }
+    }
+
+    const formatted = tasks.map((task) => {
+      const latestReview = reviewMap.get(task.id);
+      return {
+        ...task,
+        latestReview: latestReview
+          ? {
+              id: latestReview.id,
+              status: latestReview.status,
+              summary: latestReview.summary,
+              findings: latestReview.findings ?? [],
+              createdAt: latestReview.createdAt,
+              developer: latestReview.developer,
+            }
+          : null,
+      };
     });
 
-    return NextResponse.json({ tasks });
+    return NextResponse.json({ tasks: formatted });
   } catch (error) {
     console.error('[GET_TASKS_ERROR]', error);
     return NextResponse.json(

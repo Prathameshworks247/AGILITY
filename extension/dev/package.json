@@ -1,7 +1,7 @@
 {
   "name": "dev",
-  "displayName": ".",
-  "description": "Used for transfering realtime code data/ commits data to the Scrum Master",
+  "displayName": "Agility AI Companion",
+  "description": "Tracks workspace changes and streams AI code review summaries to Agility Scrum dashboards.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.105.0"
@@ -9,13 +9,75 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:agilityAI.setActiveTask",
+    "onCommand:agilityAI.sendSnapshot",
+    "onCommand:agilityAI.toggleAutoTracking"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Agility AI Companion",
+      "properties": {
+        "agilityAI.apiBaseUrl": {
+          "type": "string",
+          "description": "Base URL for the Agility AI review microservice.",
+          "default": "http://localhost:8002"
+        },
+        "agilityAI.apiToken": {
+          "type": "string",
+          "markdownDescription": "Bearer token used to authenticate with the Agility AI review microservice. Leave blank to disable authentication.",
+          "default": ""
+        },
+        "agilityAI.defaultTaskId": {
+          "type": "string",
+          "description": "Fallback task identifier used when no task is explicitly selected.",
+          "default": ""
+        },
+        "agilityAI.developerId": {
+          "type": "string",
+          "description": "Unique identifier of the signed-in developer in Agility.",
+          "default": ""
+        },
+        "agilityAI.autoTrack": {
+          "type": "boolean",
+          "description": "Automatically send snapshots for relevant files after each save.",
+          "default": true
+        },
+        "agilityAI.languages": {
+          "type": "array",
+          "description": "Language IDs that should trigger AI review snapshots.",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "typescript",
+            "javascript",
+            "typescriptreact",
+            "javascriptreact",
+            "python",
+            "go",
+            "java"
+          ]
+        }
+      }
+    },
     "commands": [
       {
-        "command": "dev.helloWorld",
-        "title": "Hello World"
+        "command": "agilityAI.setActiveTask",
+        "title": "Agility AI: Set Active Task",
+        "category": "Agility AI"
+      },
+      {
+        "command": "agilityAI.sendSnapshot",
+        "title": "Agility AI: Send Snapshot",
+        "category": "Agility AI"
+      },
+      {
+        "command": "agilityAI.toggleAutoTracking",
+        "title": "Agility AI: Toggle Auto Tracking",
+        "category": "Agility AI"
       }
     ]
   },
