@@ -271,15 +271,15 @@ const OrganizationDashboard = () => {
           {/* Create New Project Card */}
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Card className="border-dashed border-2 hover:border-primary transition-colors cursor-pointer">
-                <CardHeader className="text-center py-12">
-                  <div className="mx-auto rounded-full bg-primary/10 w-16 h-16 flex items-center justify-center mb-4">
-                    <Plus className="h-8 w-8 text-primary" />
-                  </div>
-                  <CardTitle>Create New Project</CardTitle>
-                  <CardDescription>Start a new project with your team</CardDescription>
-                </CardHeader>
-              </Card>
+          <Card className="border-dashed border-2 hover:border-primary transition-colors cursor-pointer">
+            <CardHeader className="text-center py-12">
+              <div className="mx-auto rounded-full bg-primary/10 w-16 h-16 flex items-center justify-center mb-4">
+                <Plus className="h-8 w-8 text-primary" />
+              </div>
+              <CardTitle>Create New Project</CardTitle>
+              <CardDescription>Start a new project with your team</CardDescription>
+            </CardHeader>
+          </Card>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>

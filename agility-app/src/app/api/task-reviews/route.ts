@@ -6,6 +6,15 @@ import { db } from '@/lib/db';
 type ReviewStatus = 'PASS' | 'WARN' | 'FAIL';
 
 const VALID_STATUSES: ReviewStatus[] = ['PASS', 'WARN', 'FAIL'];
+const SERVICE_TOKEN = process.env.REVIEW_SERVICE_TOKEN;
+
+function isServiceRequest(authorizationHeader: string | null): boolean {
+  if (!SERVICE_TOKEN) return false;
+  if (!authorizationHeader) return false;
+  const [scheme, token] = authorizationHeader.split(' ');
+  if (!scheme || !token) return false;
+  return scheme.toLowerCase() === 'bearer' && token === SERVICE_TOKEN;
+}
 
 function normalizeStatus(status: string): ReviewStatus | null {
   const upper = status.toUpperCase() as ReviewStatus;
@@ -26,13 +35,38 @@ function formatFindings(findings: unknown): unknown[] {
 
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const authorizationHeader = req.headers.get('authorization');
+    const serviceRequest = isServiceRequest(authorizationHeader);
 
-    if (!session?.user?.id || !session.user.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { taskId, status, summary, findings, developerId } = await req.json();
+
+    let reviewerUserId: string | null = null;
+    let session: Awaited<ReturnType<typeof getServerSession>> | null = null;
+
+    if (!serviceRequest) {
+      session = await getServerSession(authOptions);
+
+      if (!session?.user?.id || !session.user.email) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+
+      reviewerUserId = session.user.id;
+    } else {
+      if (!developerId) {
+        return NextResponse.json(
+          { error: 'developerId is required when using service token authentication' },
+          { status: 400 },
+        );
+      }
+      const developer = await db.user.findUnique({
+        where: { id: developerId },
+        select: { id: true },
+      });
+      if (!developer) {
+        return NextResponse.json({ error: 'Developer not found' }, { status: 404 });
+      }
+      reviewerUserId = developerId;
     }
-
-    const { taskId, status, summary, findings } = await req.json();
 
     if (!taskId || !status || !summary) {
       return NextResponse.json(
@@ -66,35 +100,63 @@ export async function POST(req: Request) {
       );
     }
 
-    const membership = await db.organizationMember.findFirst({
-      where: {
-        organization: {
-          projects: {
-            some: {
-              id: projectId,
+    if (!serviceRequest) {
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      const membership = await db.organizationMember.findFirst({
+        where: {
+          organization: {
+            projects: {
+              some: {
+                id: projectId,
+              },
             },
           },
+          userId: session?.user?.id,
         },
-        userId: session.user.id,
-      },
-      select: {
-        id: true,
-      },
-    });
+        select: {
+          id: true,
+        },
+      });
 
-    const isMember = Boolean(membership);
+      const isMember = Boolean(membership);
 
-    if (!isMember) {
-      return NextResponse.json(
-        { error: 'You do not have access to submit a review for this task' },
-        { status: 403 },
-      );
+      if (!isMember) {
+        return NextResponse.json(
+          { error: 'You do not have access to submit a review for this task' },
+          { status: 403 },
+        );
+      }
+    } else {
+      const membership = await db.organizationMember.findFirst({
+        where: {
+          organization: {
+            projects: {
+              some: {
+                id: projectId,
+              },
+            },
+          },
+          userId: reviewerUserId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!membership) {
+        return NextResponse.json(
+          { error: 'Developer is not a member of the organization that owns this task' },
+          { status: 403 },
+        );
+      }
     }
 
     const review = await (db as any).taskReview.create({
       data: {
         taskId,
-        developerId: session.user.id,
+        developerId: reviewerUserId!,
         status: normalizedStatus,
         summary: summary.trim(),
         findings: formatFindings(findings),

@@ -245,7 +245,7 @@ const ProjectDashboard = () => {
                       placeholder="What do you want to achieve in this sprint?"
                       rows={2}
                     />
-                  </div>
+                        </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="startDate">Start Date</Label>
@@ -256,7 +256,7 @@ const ProjectDashboard = () => {
                         onChange={(e) => setNewSprint({ ...newSprint, startDate: e.target.value })}
                         required
                       />
-                    </div>
+                      </div>
                     <div>
                       <Label htmlFor="endDate">End Date</Label>
                       <Input
@@ -291,23 +291,23 @@ const ProjectDashboard = () => {
               </form>
             </DialogContent>
           </Dialog>
-        </div>
+                </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {sprints.map((sprint) => (
-            <Link key={sprint.id} href={`/project/${projectId}/sprint/${sprint.id}`}>
+                    <Link key={sprint.id} href={`/project/${projectId}/sprint/${sprint.id}`}>
               <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
                 <CardHeader>
-                  <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center justify-between mb-2">
                     <CardTitle>{sprint.name}</CardTitle>
                     <Badge variant={getStatusColor(sprint.status)}>
-                      {sprint.status}
-                    </Badge>
-                  </div>
+                            {sprint.status}
+                          </Badge>
+                        </div>
                   <CardDescription>{sprint.goal || 'No goal set'}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground flex items-center gap-2">
                         <Calendar className="h-4 w-4" />
@@ -344,9 +344,9 @@ const ProjectDashboard = () => {
                         />
                       </div>
                     )}
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+              </CardContent>
+            </Card>
             </Link>
           ))}
         </div>

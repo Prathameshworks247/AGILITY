@@ -156,14 +156,18 @@ The extension should POST the final review payload to `/api/task-reviews`.
 
 ## Security & Access Control
 
-- Only authenticated users can submit or read reviews.
-- Developers can post reviews for tasks in organizations they are members of.
+- Only authenticated users or service-to-service calls with a valid `REVIEW_SERVICE_TOKEN` can submit reviews.
+- When using the service token, the FastAPI microservice must supply a valid `developerId` that exists in the Agility user database.
 - Scrum Masters (or any org member) can review history.
 - Findings are stored as JSON; avoid including secrets or PII in the payload.
 
+### Environment Variables
+
+- `REVIEW_SERVICE_TOKEN` (Next.js) – Shared secret that grants the FastAPI microservice access to `/api/task-reviews`.
+- `NEXTJS_SERVICE_TOKEN` (FastAPI) – Must match `REVIEW_SERVICE_TOKEN` so the microservice can authenticate when forwarding reviews.
+
 ## Next Steps
 
-- Add service token support so the microservice can authenticate without a user session.
 - Stream reviews via WebSockets or SSE for instant dashboard updates.
 - Track review resolution by linking findings to follow-up commits or comments.
 - Support bulk reviews (e.g., per commit) and PR summarization.

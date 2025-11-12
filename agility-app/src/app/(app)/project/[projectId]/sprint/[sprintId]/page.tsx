@@ -392,7 +392,22 @@ const [projectInfo, setProjectInfo] = useState<{ id: string; orgId: string; name
               <CardContent className="p-4">
                 <div className="space-y-3">
                   <div className="flex items-start justify-between">
-                    <h4 className="font-medium text-sm">{task.title}</h4>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-sm">{task.title}</h4>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(task.id);
+                          toast.success('Task ID copied to clipboard!');
+                        }}
+                        className="text-[10px] text-muted-foreground hover:text-foreground font-mono mt-1 flex items-center gap-1 group"
+                        title="Click to copy Task ID"
+                      >
+                        <span className="truncate max-w-[200px]">ID: {task.id}</span>
+                        <svg className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                    </div>
                     <Button
                       size="icon"
                       variant="ghost"
@@ -613,6 +628,27 @@ const [projectInfo, setProjectInfo] = useState<{ id: string; orgId: string; name
                 </DialogHeader>
                 <form onSubmit={handleSaveEdit}>
                   <div className="space-y-4">
+                    {selectedTask && (
+                      <div className="rounded-md border bg-muted/40 p-3">
+                        <Label className="text-xs text-muted-foreground">Task ID (for VS Code Extension)</Label>
+                        <div className="flex items-center gap-2 mt-1">
+                          <code className="flex-1 text-xs font-mono bg-background px-2 py-1 rounded border truncate">
+                            {selectedTask.id}
+                          </code>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              navigator.clipboard.writeText(selectedTask.id);
+                              toast.success('Task ID copied! Use it in VS Code extension.');
+                            }}
+                          >
+                            Copy ID
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <Label htmlFor="edit-title">Task Title</Label>
                       <Input
