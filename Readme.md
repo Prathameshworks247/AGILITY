@@ -7,6 +7,13 @@
 
 > Transform your development workflow with real-time AI code reviews directly in your IDE. Link code changes to sprint tasks and give Scrum Masters instant visibility into code quality.
 
+### Team 
+- Prathamesh Patil (23bds043)
+- Shreevats (23bds055)
+- Vishawjeet Yadav (23bds069)
+- Yashpreet Singh (23bds072)
+- Tanmay Gupta (23bds061)
+
 ## 🎯 Overview
 
 Agility AI is a comprehensive code review system that integrates seamlessly into your development workflow. It automatically tracks code changes, performs AI-powered analysis, and displays results in real-time on your sprint board.
