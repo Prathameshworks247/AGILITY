@@ -10,7 +10,7 @@
 ### Team 
 - Prathamesh Patil (23bds043)
 - Shreevats (23bds055)
-- Vishawjeet Yadav (23bds069)
+- Vishavjeet Yadav (23bds069)
 - Yashpreet Singh (23bds072)
 - Tanmay Gupta (23bds061)
 
