@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, Circle, Clock, AlertCircle } from 'lucide-react';
@@ -135,6 +135,11 @@ const DeveloperDashboard = () => {
           <CardContent>
             <div className="text-2xl font-bold">{stats.total}</div>
           </CardContent>
+          <CardFooter>
+            <div className="text-sm text-muted-foreground">
+            Dev ID: {session?.user?.id || 'N/A'}
+            </div>
+          </CardFooter>
         </Card>
 
         <Card>

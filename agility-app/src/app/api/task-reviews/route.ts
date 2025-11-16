@@ -129,25 +129,37 @@ export async function POST(req: Request) {
         );
       }
     } else {
-      const membership = await db.organizationMember.findFirst({
-        where: {
-          organization: {
-            projects: {
-              some: {
-                id: projectId,
+      // Check if developer is either a project member OR organization member
+      const [projectMembership, orgMembership] = await Promise.all([
+        db.projectMember.findFirst({
+          where: {
+            projectId,
+            userId: reviewerUserId,
+          },
+          select: {
+            id: true,
+          },
+        }),
+        db.organizationMember.findFirst({
+          where: {
+            organization: {
+              projects: {
+                some: {
+                  id: projectId,
+                },
               },
             },
+            userId: reviewerUserId,
           },
-          userId: reviewerUserId,
-        },
-        select: {
-          id: true,
-        },
-      });
+          select: {
+            id: true,
+          },
+        }),
+      ]);
 
-      if (!membership) {
+      if (!projectMembership && !orgMembership) {
         return NextResponse.json(
-          { error: 'Developer is not a member of the organization that owns this task' },
+          { error: 'Developer is not a member of the project or organization that owns this task. Please join the organization or project first.' },
           { status: 403 },
         );
       }

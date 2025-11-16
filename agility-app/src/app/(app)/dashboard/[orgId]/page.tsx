@@ -108,7 +108,6 @@ const OrganizationDashboard = () => {
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization) return;
-    
     setIsCreating(true);
     try {
       const response = await fetch('/api/projects', {
