@@ -11,8 +11,6 @@
 - Prathamesh Patil (23bds043)
 - Shreevats (23bds055)
 - Vishavjeet Yadav (23bds069)
-- Yashpreet Singh (23bds072)
-- Tanmay Gupta (23bds061)
 
 Demo Link - https://drive.google.com/file/d/1F8Q4K26GFDWiVAImJ32dsoUD-Mq_PuFr/view?usp=sharing
 
