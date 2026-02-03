@@ -1,6 +1,6 @@
 """
-Prompt templates for the LLM review: system prompt and structured user prompt
-with repository context, change summary, and relevant surrounding code.
+Prompt templates for the LLM review: structured format with header, checklist,
+inline comments, and summary. Uses batched review (one call) for conciseness.
 """
 
 from __future__ import annotations
@@ -10,14 +10,37 @@ from typing import Sequence
 from app.models import ReviewUnit
 
 
-SYSTEM_PROMPT = """You are an expert code reviewer. Your task is to review code changes in a pull request with full awareness of their impact.
+SYSTEM_PROMPT = """You are an expert code reviewer. Produce a concise, structured review.
 
-You will be given:
-1. A short repository context (if any).
-2. A structured summary of what semantically changed (added/removed/modified symbols, with descriptors like signature_change).
-3. Relevant surrounding code: the changed symbol and structurally dependent code (callers, callees, tests) retrieved via a repository graph.
+## Output format (strict)
 
-Use this graph-based context to reason about indirect impacts that flat retrieval often misses: broken callers, missing test updates, contract violations, and performance or security implications. Focus on correctness, security, performance, style, and test coverage. For each finding, suggest a concrete fix when applicable."""
+### 1. Review Header
+- **Title:** One short line describing the change
+- **Purpose:** What problem this solves (1-2 sentences)
+- **Scope:** Bullet list of files/modules touched
+- **Risk:** Low / Medium / High (one word)
+
+### 2. Checklist (brief)
+For each category, write 1 line or "OK" if fine:
+- **Functionality:** Correctness, edge cases, backward compatibility
+- **Design:** Right patterns, not over/under-engineered
+- **Code Quality:** Readability, no duplication, no dead code
+- **Performance:** Unnecessary loops/DB/API calls?
+- **Security:** Input validation, auth, no hardcoded secrets
+- **Testing:** Tests added/updated, meaningful coverage?
+- **Documentation:** Comments/README where needed?
+
+### 3. Inline comments (Observation → Impact → Suggestion)
+For each issue found, use format:
+- **[Nit|Suggestion|Issue|Blocking]** `file:line` — Observation. Impact. Suggestion.
+Only include actual issues; skip categories with none.
+
+### 4. Summary
+- **Overall:** 1-2 sentences
+- **Decision:** ✅ Approved | 🔄 Approved with nits | 🛑 Changes requested
+- **Requested changes:** Bullet list if any, else "None"
+
+Keep the review SHORT. Focus on high-impact issues. Do not repeat the same feedback across multiple symbols. Group related changes. Omit empty sections."""
 
 
 def build_user_prompt(
@@ -26,10 +49,7 @@ def build_user_prompt(
     relevant_code_snippets: str,
     instructions_override: str | None = None,
 ) -> str:
-    """
-    Build the user (or assistant) prompt with repository context, change summary,
-    and relevant surrounding code. Optionally append custom instructions.
-    """
+    """Legacy: per-unit prompt (kept for compatibility)."""
     sections = []
     if repo_context.strip():
         sections.append("## Repository context\n\n" + repo_context.strip())
@@ -40,11 +60,32 @@ def build_user_prompt(
     return "\n\n".join(sections)
 
 
+def build_batched_prompt(
+    scope_files: list[str],
+    symbol_summary: list[str],
+    import_graph: str,
+    code_diffs: str,
+    max_diff_lines: int = 150,
+) -> str:
+    """Build one consolidated prompt for batched review."""
+    parts = []
+    parts.append("## Scope (files/modules touched)\n")
+    parts.append("\n".join(f"- {f}" for f in scope_files[:20]))  # cap files
+    parts.append("\n\n## Symbol-level changes\n")
+    parts.append("\n".join(f"- {s}" for s in symbol_summary[:50]))  # cap symbols
+    if import_graph.strip():
+        parts.append("\n\n## Import / dependency relationships\n")
+        parts.append(import_graph.strip())
+    parts.append("\n\n## Code diffs (key changes)\n")
+    # Truncate if too long
+    if len(code_diffs) > max_diff_lines * 40:  # ~40 chars/line
+        code_diffs = code_diffs[: max_diff_lines * 40] + "\n\n[... truncated for length ...]"
+    parts.append(code_diffs.strip() or "(no diffs)")
+    return "\n".join(parts)
+
+
 def format_review_unit_for_prompt(unit: ReviewUnit, context_snippets: dict[str, str]) -> str:
-    """
-    Format a single ReviewUnit into the "Relevant surrounding code" section:
-    changed symbol snippet (before/after) plus context node snippets with labels.
-    """
+    """Legacy: format single ReviewUnit (kept for compatibility)."""
     parts = []
     if unit.before_snippet or unit.after_snippet:
         parts.append("### Changed symbol")
@@ -60,7 +101,7 @@ def format_review_unit_for_prompt(unit: ReviewUnit, context_snippets: dict[str, 
 
 
 def change_summary_bullets_for_unit(unit: ReviewUnit) -> list[str]:
-    """Produce bullet points for the change summary from a ReviewUnit."""
+    """Legacy: bullets for single unit."""
     sc = unit.symbol_change
     bullets = [f"{sc.file_path} :: {sc.symbol_name} ({sc.kind.value}): {sc.change_type.value}"]
     if sc.descriptors:

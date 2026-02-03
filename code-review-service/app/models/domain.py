@@ -42,6 +42,7 @@ class RepositoryRef(BaseModel):
 
     url: str = Field(..., description="Clone URL of the repository")
     default_branch: Optional[str] = Field(None, description="Default branch name, e.g. main")
+    local_path: Optional[str] = Field(None, description="If set, use this local path instead of cloning")
 
 
 class PullRequestRef(BaseModel):

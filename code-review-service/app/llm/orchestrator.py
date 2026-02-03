@@ -5,8 +5,12 @@ aggregate findings into PR-level summary and per-unit findings.
 
 from __future__ import annotations
 
+import logging
 import re
+import time
 from typing import Sequence
+
+logger = logging.getLogger("app.orchestrator")
 
 from app.models import ReviewFinding, ReviewUnit
 from app.context.prompts import (
@@ -98,7 +102,12 @@ class ReviewOrchestrator:
         """
         all_findings: list[ReviewFinding] = []
         summaries: list[str] = []
-        for unit in units:
+        n = len(units)
+        logger.info("Starting LLM review of %d units", n)
+        for idx, unit in enumerate(units, 1):
+            t0 = time.monotonic()
+            symbol = f"{unit.symbol_change.file_path}::{unit.symbol_change.symbol_name}"
+            logger.info("LLM unit %d/%d: %s", idx, n, symbol)
             bullets = change_summary_bullets_for_unit(unit)
             context_snippets = {}
             if self.store and self.assembler:
@@ -112,7 +121,13 @@ class ReviewOrchestrator:
                     chunk_acc.append(chunk)
                 response = "".join(chunk_acc)
             else:
-                response = await self.llm.complete(SYSTEM_PROMPT, user_prompt)
+                try:
+                    response = await self.llm.complete(SYSTEM_PROMPT, user_prompt)
+                except Exception as e:
+                    logger.exception("LLM call failed for %s: %s", symbol, e)
+                    response = f"[LLM error: {e}]"
+            elapsed = time.monotonic() - t0
+            logger.info("LLM unit %d/%d done (%.1fs)", idx, n, elapsed)
             summaries.append(response)
             findings = _parse_findings_from_response(
                 response,
@@ -121,4 +136,52 @@ class ReviewOrchestrator:
             )
             all_findings.extend(findings)
         summary = "\n\n---\n\n".join(summaries) if summaries else "No review output."
+        logger.info("LLM review complete: %d findings", len(all_findings))
         return summary, all_findings
+
+    async def run_per_unit(
+        self,
+        units: Sequence[ReviewUnit],
+        repo_context: str = "",
+    ) -> tuple[list[dict], list[ReviewFinding]]:
+        """
+        Run one LLM call per unit and return per-unit outputs.
+        Returns (unit_reviews, findings).
+        """
+        all_findings: list[ReviewFinding] = []
+        unit_reviews: list[dict] = []
+        n = len(units)
+        logger.info("Starting per-unit LLM review of %d units", n)
+        for idx, unit in enumerate(units, 1):
+            t0 = time.monotonic()
+            symbol = f"{unit.symbol_change.file_path}::{unit.symbol_change.symbol_name}"
+            bullets = change_summary_bullets_for_unit(unit)
+            context_snippets = {}
+            if self.store and self.assembler:
+                for nid in unit.context_node_ids:
+                    context_snippets[nid] = self.assembler.load_snippet_for_node(self.store, nid)
+            relevant_code = format_review_unit_for_prompt(unit, context_snippets)
+            user_prompt = build_user_prompt(repo_context, bullets, relevant_code)
+            try:
+                response = await self.llm.complete(SYSTEM_PROMPT, user_prompt)
+            except Exception as e:
+                logger.exception("LLM call failed for %s: %s", symbol, e)
+                response = f"[LLM error: {e}]"
+            elapsed = time.monotonic() - t0
+            logger.info("LLM unit %d/%d done (%.1fs)", idx, n, elapsed)
+            unit_reviews.append(
+                {
+                    "file": unit.symbol_change.file_path,
+                    "symbol": unit.symbol_change.symbol_name,
+                    "kind": unit.symbol_change.kind.value,
+                    "review": response,
+                }
+            )
+            findings = _parse_findings_from_response(
+                response,
+                default_file=unit.symbol_change.file_path,
+                default_symbol=unit.symbol_change.symbol_name,
+            )
+            all_findings.extend(findings)
+        logger.info("Per-unit LLM review complete: %d findings", len(all_findings))
+        return unit_reviews, all_findings
